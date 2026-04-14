@@ -1,0 +1,156 @@
+================================================================
+DATA DICTIONARY
+Whale-Vessel Disturbance Risk — California Coast
+================================================================
+
+----------------------------------------------------------------
+1. NOAA WHALEWATCH
+----------------------------------------------------------------
+Source:   NOAA Fisheries WhaleWatch (whalewatch.noaa.gov)
+Format:   CSV, one file per month
+Files:    WhaleWatchPredictions_YYYY_MM.csv
+Coverage: 2020–2025 (some months missing — see whale_watch_missing_months.txt)
+Grid:     0.25-degree resolution, US West Coast
+
+Each row represents one grid cell for one month.
+
+COLUMNS
+-------
+longitude   Longitude of grid cell center. Raw values are in 0–360 degree
+            convention (e.g. 225 = -135 in standard -180/180 convention).
+            Converted to standard convention in processing by subtracting
+            360 from values above 180.
+
+latitude    Latitude of grid cell center, in standard -90/90 convention.
+            Ranges from approximately 30 to 49 degrees North.
+
+bathy       Water depth at the grid cell center, in meters. Negative values
+            indicate depth below sea surface. Sourced from bathymetric
+            datasets used in the WhaleWatch model.
+
+bathyrms    Bathymetric roughness — standard deviation of depth within the
+            grid cell. Higher values indicate more varied seafloor terrain.
+
+sst         Sea surface temperature in degrees Celsius. Derived from
+            satellite remote sensing products. A key predictor of whale
+            distribution as whales follow productive, cooler upwelling zones.
+
+chl         Chlorophyll-a concentration in mg/m³. A proxy for phytoplankton
+            abundance and ocean productivity. High chlorophyll areas
+            indicate productive feeding habitat that attracts whales.
+
+ssh         Sea surface height in meters, derived from satellite altimetry.
+            Relates to ocean circulation patterns and mesoscale features
+            such as eddies that concentrate prey.
+
+sshrms      Sea surface height variability — standard deviation of SSH
+            within the grid cell. Indicates dynamic oceanographic features.
+
+month       Month of the observation (1–12).
+
+year        Year of the observation.
+
+fitmean     Modeled whale density estimate — the predicted number of whales
+            per 100 km². This is the primary model output. NA values indicate
+            the model could not produce an estimate for that cell-month due
+            to insufficient satellite input data. NA rows are excluded from
+            analysis and should NOT be treated as zero.
+
+sdfit       Standard deviation of the whale density estimate (fitmean).
+            Represents model uncertainty. Higher values indicate less
+            confident predictions.
+
+percent     Modeled whale presence probability, expressed as a percentage
+            (0–100). Represents the probability that at least one whale is
+            present in the grid cell in a given month. This is the primary
+            input to the disturbance risk calculation. NA follows same
+            rules as fitmean.
+
+density     Alternative density metric. May differ from fitmean depending
+            on model version. Check units before use.
+
+sddens      Standard deviation of the density estimate.
+
+upper       Upper confidence bound of the density estimate.
+
+NOTE ON NA VALUES
+-----------------
+NA values in fitmean, percent, and related model output columns mean the
+WhaleWatch model did not run for that cell in that month. This is typically
+caused by gaps in the satellite oceanographic input data (SST, chlorophyll,
+SSH). NA does not mean whales were absent — it means no prediction was
+possible. These rows are dropped before analysis.
+
+
+----------------------------------------------------------------
+2. GLOBAL FISHING WATCH — AIS VESSEL PRESENCE
+----------------------------------------------------------------
+Source:   Global Fishing Watch 4Wings API, public-global-presence:latest
+          (globalfishingwatch.org)
+Format:   CSV, one file per month
+Files:    gfw_YYYY_MM.csv
+Coverage: 2020–2025
+Bounding: lon -135 to -115, lat 30 to 49 (US West Coast)
+Grid:     0.1-degree resolution (LOW spatial resolution setting)
+
+Each row represents one grid cell, for one vessel type, one speed band,
+one flag state, for one month. Multiple rows can share the same lat/lon
+if different flags or speed bands are present in that cell.
+
+COLUMNS
+-------
+lat         Latitude of grid cell center in standard -90/90 convention.
+            Values are at 0.1-degree resolution (e.g. 37.8, 38.1).
+
+lon         Longitude of grid cell center in standard -180/180 convention.
+            Values are at 0.1-degree resolution (e.g. -122.5, -124.3).
+
+hours       Vessel presence in hours. Calculated as one AIS position per
+            vessel per hour, aggregated over all vessels of the given type
+            and speed band in the cell for the month. This is the primary
+            vessel exposure metric used in the risk calculation.
+
+date        Month-year string for the observation (e.g. "2020-01").
+
+flag        ISO3 country code of the vessel flag state (e.g. USA, PAN, LBR).
+            Included because the API requires grouping by flag. For risk
+            analysis, hours are summed across all flags per cell.
+
+vesselIDs   Number of distinct vessels contributing to the hours total
+            in this row.
+
+vessel_type Vessel category, one of:
+              cargo   — bulk carriers, container ships, general cargo
+              fishing — commercial fishing vessels of all gear types
+            (tanker was excluded due to very low presence in study area)
+
+speed_band  Speed range of the vessel in knots, one of:
+              <2      — nearly stationary, anchored or drifting
+              2-4     — very slow
+              4-6     — slow
+              6-10    — moderate
+              10-15   — normal transit speed, elevated strike risk
+              15-25   — fast transit, high strike risk
+              >25     — very fast, highest strike risk
+            Speed bands are used to compute a weighted exposure score
+            where faster vessels contribute more to collision risk.
+
+year        Year of the observation (integer, added during processing).
+
+month       Month of the observation (integer 1–12, added during processing).
+
+NOTE ON SPEED WEIGHTING
+-----------------------
+Literature on whale-vessel collisions identifies approximately 10 knots
+as a critical threshold above which strikes become more likely to be
+lethal (Conn and Silber 2013, van der Hoop et al. 2015). Speed bands
+are used to construct a weighted vessel exposure score in the analysis,
+where higher speed bands receive greater weight in the risk index.
+
+NOTE ON GRID ALIGNMENT
+-----------------------
+GFW data is on a 0.1-degree grid. WhaleWatch data is on a 0.25-degree
+grid. Before joining, GFW cell hours are aggregated to the 0.25-degree
+whale watch grid by snapping each GFW cell to its nearest whale watch
+grid point.
+
